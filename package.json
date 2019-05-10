@@ -1,0 +1,19 @@
+{
+  "name": "corekey",
+  "version": "0.1.0",
+  "description": "A simply Misskey library for Node.js",
+  "scripts": {
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marihachi/corekey.git"
+  },
+  "author": "Marihachi",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/marihachi/corekey/issues"
+  },
+  "dependencies": {
+    "node-fetch": "^2.5.0"
+  }
+}
