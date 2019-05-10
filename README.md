@@ -39,6 +39,8 @@ await account.request('notes/create', {
 });
 ```
 
+Note: If you use `await`, you need to wrap the statement with Async Function.
+
 Enjoy!
 
 ## License
