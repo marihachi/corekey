@@ -1,8 +1,11 @@
 {
   "name": "corekey",
-  "version": "0.1.0",
+  "version": "1.0.0-beta.1",
   "description": "A simply Misskey library for Node.js",
-  "scripts": {},
+  "main": "built/lib.js",
+  "scripts": {
+    "build": "tsc"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/marihachi/corekey.git"
@@ -13,6 +16,12 @@
     "url": "https://github.com/marihachi/corekey/issues"
   },
   "dependencies": {
-    "node-fetch": "^2.5.0"
-  }
+    "@types/node": "^12.0.0",
+    "@types/node-fetch": "^2.3.3",
+    "node-fetch": "^2.5.0",
+    "typescript": "^3.4.5"
+  },
+  "files": [
+    "built"
+  ]
 }
