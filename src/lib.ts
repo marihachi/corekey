@@ -76,7 +76,7 @@ export class AuthSession {
 		return userToken;
 	}
 
-	async waitUntilAuthorized(): Promise<Account> {
+	async waitForAuth(): Promise<Account> {
 		function delay(ms: number): Promise<void> {
 			return new Promise<void>(resolve => setTimeout(() => resolve(), ms));
 		}

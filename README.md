@@ -28,7 +28,7 @@ Let's get your account instance!
 const session = await AuthSession.generate(app);
 console.log('open in your browser: ', session.url);
 
-const account = await session.waitUntilAuthorized();
+const account = await session.waitForAuth();
 ```
 
 ### 4. Access a lot of APIs
