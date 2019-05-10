@@ -2,8 +2,7 @@
   "name": "corekey",
   "version": "0.1.0",
   "description": "A simply Misskey library for Node.js",
-  "scripts": {
-  },
+  "scripts": {},
   "repository": {
     "type": "git",
     "url": "git+https://github.com/marihachi/corekey.git"
