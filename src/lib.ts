@@ -59,11 +59,13 @@ export class AuthSession {
 	private _app: App;
 	private _token: string;
 	private _url: string;
+	private _cancel: boolean;
 
 	constructor(app: App, token: string, url: string) {
 		this._app = app;
 		this._token = token;
 		this._url = url;
+		this._cancel = false;
 	}
 
 	get url(): string {
@@ -96,8 +98,15 @@ export class AuthSession {
 			if (!isApiError(userToken)) {
 				return new Account(this._app, userToken.accessToken);
 			}
+			if (this._cancel) {
+				throw new Error('waiting-canceled');
+			}
 			await delay(1000);
 		}
+	}
+
+	cancelWaiting() {
+		this._cancel = true;
 	}
 }
 
