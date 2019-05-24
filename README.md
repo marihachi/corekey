@@ -43,5 +43,18 @@ Note: If you use `await`, you need to wrap the statement with Async Function.
 
 Enjoy!
 
+## Other features
+### Configuration of requester
+The requesters provide prosessing of API request.
+You can define and set a custom-requester to the `Configuration.Requester`.
+The requester need to implements the `IRequester` interface.
+The default value of `Configuration.Requester` is `FetchRequester`.
+`FetchRequester` fetches the API execution result by using the Fetch API.
+
+e.g.
+```ts
+Configuration.Requester = new StubRequester();
+```
+
 ## License
 MIT
