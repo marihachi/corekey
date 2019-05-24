@@ -1,8 +1,12 @@
 import crypto from 'crypto';
 import fetch from 'node-fetch';
 
-export class Core {
-	static async request(host: string, endpoint: string, data: any): Promise<any> {
+export interface IRequester {
+	request(host: string, endpoint: string, data: any): Promise<any>;
+}
+
+export class FetchRequester implements IRequester {
+	async request(host: string, endpoint: string, data: any): Promise<any> {
 		let res;
 		try {
 			res = await fetch(`https://${host}/api/${endpoint}` , {
@@ -20,6 +24,11 @@ export class Core {
 	}
 }
 
+class Configurator {
+	Requester: IRequester = new FetchRequester();
+}
+export const Configuration = new Configurator();
+
 export class App {
 	host: string;
 	secret: string;
@@ -30,7 +39,7 @@ export class App {
 	}
 
 	static async create(host: string, name: string, description: string, permissions: string[], callbackUrl?: string) {
-		const app = await Core.request(host, 'app/create', {
+		const app = await Configuration.Requester.request(host, 'app/create', {
 			name: name,
 			description: description,
 			permission: permissions,
@@ -62,14 +71,14 @@ export class AuthSession {
 	}
 
 	static async generate(app: App): Promise<AuthSession> {
-		const authSession = await Core.request(app.host, 'auth/session/generate', {
+		const authSession = await Configuration.Requester.request(app.host, 'auth/session/generate', {
 			appSecret: app.secret
 		});
 		return new AuthSession(app, authSession.token, authSession.url);
 	}
 
 	async getUserToken(): Promise<UserToken | ApiError> {
-		const userToken = await Core.request(this._app.host, 'auth/session/userkey', {
+		const userToken = await Configuration.Requester.request(this._app.host, 'auth/session/userkey', {
 			appSecret: this._app.secret,
 			token: this._token
 		});
@@ -110,7 +119,7 @@ export class Account {
 	}
 
 	async request(endpoint: string, data: {[x: string]: any}): Promise<any> {
-		const res = await Core.request(this.app.host, endpoint, {
+		const res = await Configuration.Requester.request(this.app.host, endpoint, {
 			i: this._i,
 			...data
 		});
