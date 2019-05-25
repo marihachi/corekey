@@ -1,20 +1,53 @@
 import crypto from 'crypto';
 import fetch from 'node-fetch';
+import FormData from 'form-data';
+import $ from 'cafy';
+
+const isReadableStream = (obj: any) => obj != undefined && obj.readable === true && typeof obj.read == 'function';
 
 export interface IRequester {
-	request(host: string, endpoint: string, data: any): Promise<any>;
+	request(host: string, endpoint: string, data: {[x: string]: any}, isBinary: boolean): Promise<any>;
 }
 
 export class FetchRequester implements IRequester {
-	async request(host: string, endpoint: string, data: any): Promise<any> {
+	async request(host: string, endpoint: string, data: {[x: string]: any}, isBinary: boolean): Promise<any> {
+		let headers, body;
+
+		if (isBinary) {
+			const formData = new FormData();
+			for (const key of Object.keys(data)) {
+				const value = data[key];
+				if (isReadableStream(value) || Buffer.isBuffer(value) || $.either($.number, $.string).ok(value)) {
+					formData.append(key, value);
+				}
+				else if ($.boolean.ok(value)) {
+					formData.append(key, String(value));
+				}
+				else {
+					throw new Error('invalid-parameter-type');
+				}
+			}
+
+			headers = formData.getHeaders();
+			body = formData;
+		}
+		else {
+			for (const key of Object.keys(data)) {
+				const value = data[key];
+				if (isReadableStream(value) || Buffer.isBuffer(value)) {
+					throw new Error('invalid-parameter-type');
+				}
+			}
+			headers = { 'Content-Type': 'application/json' };
+			body = JSON.stringify(data);
+		}
+
 		let res;
 		try {
 			res = await fetch(`https://${host}/api/${endpoint}` , {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify(data)
+				headers: headers,
+				body: body
 			});
 		}
 		catch (err) {
@@ -44,7 +77,7 @@ export class App {
 			description: description,
 			permission: permissions,
 			callbackUrl: callbackUrl
-		});
+		}, false);
 		return new App(host, app.secret);
 	}
 }
@@ -75,7 +108,7 @@ export class AuthSession {
 	static async generate(app: App): Promise<AuthSession> {
 		const authSession = await Configuration.Requester.request(app.host, 'auth/session/generate', {
 			appSecret: app.secret
-		});
+		}, false);
 		return new AuthSession(app, authSession.token, authSession.url);
 	}
 
@@ -83,7 +116,7 @@ export class AuthSession {
 		const userToken = await Configuration.Requester.request(this._app.host, 'auth/session/userkey', {
 			appSecret: this._app.secret,
 			token: this._token
-		});
+		}, false);
 		return userToken;
 	}
 
@@ -131,7 +164,16 @@ export class Account {
 		const res = await Configuration.Requester.request(this.app.host, endpoint, {
 			i: this._i,
 			...data
-		});
+		}, false);
+
+		return res;
+	}
+
+	async requestBinary(endpoint: string, data: {[x: string]: any}): Promise<any> {
+		const res = await Configuration.Requester.request(this.app.host, endpoint, {
+			i: this._i,
+			...data
+		}, true);
 
 		return res;
 	}
