@@ -39,6 +39,14 @@ await account.request('notes/create', {
 });
 ```
 
+You can also upload binary data. Let's upload files to your drive!
+```ts
+await account.requestBinary('drive/files/create', {
+	force: true,
+	file: fs.createReadStream('picture.jpg');
+});
+```
+
 Note: If you use `await`, you need to wrap the statement with Async Function.
 
 Enjoy!
