@@ -59,6 +59,7 @@ export class FetchRequester implements IRequester {
 
 class Configurator {
 	Requester: IRequester = new FetchRequester();
+	waitForAuthInterval: number = 1000;
 }
 export const Configuration = new Configurator();
 
@@ -134,7 +135,7 @@ export class AuthSession {
 			if (this._cancel) {
 				throw new Error('waiting-canceled');
 			}
-			await delay(1000);
+			await delay(Configuration.waitForAuthInterval);
 		}
 	}
 
