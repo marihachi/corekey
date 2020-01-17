@@ -63,6 +63,13 @@ class Configurator {
 }
 export const Configuration = new Configurator();
 
+export class Server {
+	static async getVersion(host: string): Promise<string> {
+		const response = await Configuration.Requester.request(host, 'version', { }, false);
+		return response.version;
+	}
+}
+
 export class App {
 	host: string;
 	secret: string;
