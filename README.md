@@ -64,5 +64,13 @@ e.g.
 Configuration.Requester = new StubRequester();
 ```
 
+### Acquisition version of Misskey instance
+You may need to get the version of Misskey instance when authorization of a Misskey App.
+You can get version of Misskey instance as follows.
+```ts
+const version: string = await Server.getVersion('misskey.io');
+```
+Note that you need to import `Server` class from the corekey.
+
 ## License
 MIT
