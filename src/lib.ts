@@ -44,7 +44,7 @@ export class FetchRequester implements IRequester {
 
 		let res;
 		try {
-			res = await fetch(`https://${host}/api/${endpoint}` , {
+			res = await fetch(`https://${host}/api/${endpoint}`, {
 				method: 'POST',
 				headers: headers,
 				body: body
