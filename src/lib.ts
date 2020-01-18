@@ -2,6 +2,14 @@ import crypto from 'crypto';
 import fetch from 'node-fetch';
 import FormData from 'form-data';
 import $ from 'cafy';
+import { IClientConfig } from 'websocket';
+import { delay } from './util';
+import { Stream, NoteUpdatedEvent } from './streaming';
+
+
+export {
+	NoteUpdatedEvent
+};
 
 const isReadableStream = (obj: any) => obj != undefined && obj.readable === true && typeof obj.read == 'function';
 
@@ -129,10 +137,6 @@ export class AuthSession {
 	}
 
 	async waitForAuth(): Promise<Account> {
-		function delay(ms: number): Promise<void> {
-			return new Promise<void>(resolve => setTimeout(() => resolve(), ms));
-		}
-
 		let userToken;
 		for (;;) {
 			userToken = await this.getUserToken();
@@ -184,5 +188,9 @@ export class Account {
 		}, true);
 
 		return res;
+	}
+
+	connectStream(config?: IClientConfig): Promise<Stream> {
+		return Stream.connect(this.app.host, true, this._i, config);
 	}
 }
