@@ -58,7 +58,7 @@ export class FetchRequester implements IRequester {
 }
 
 class AuthorizationConfig {
-	pollingInterval: number = 1000;
+	pollingInterval: number = 300;
 }
 class RootConfig {
 	requester: IRequester = new FetchRequester();
