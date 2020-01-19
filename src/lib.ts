@@ -65,15 +65,18 @@ export class FetchRequester implements IRequester {
 	}
 }
 
-class Configurator {
-	Requester: IRequester = new FetchRequester();
-	waitForAuthInterval: number = 1000;
+class AuthorizationConfig {
+	pollingInterval: number = 300;
 }
-export const Configuration = new Configurator();
+class RootConfig {
+	requester: IRequester = new FetchRequester();
+	authorization: AuthorizationConfig = new AuthorizationConfig();
+}
+export let Config = new RootConfig();
 
 export class Server {
 	static async getVersion(host: string): Promise<string> {
-		const response = await Configuration.Requester.request(host, 'version', { }, false);
+		const response = await Config.requester.request(host, 'version', { }, false);
 		return response.version;
 	}
 }
@@ -88,7 +91,7 @@ export class App {
 	}
 
 	static async create(host: string, name: string, description: string, permissions: string[], callbackUrl?: string) {
-		const app = await Configuration.Requester.request(host, 'app/create', {
+		const app = await Config.requester.request(host, 'app/create', {
 			name: name,
 			description: description,
 			permission: permissions,
@@ -122,14 +125,14 @@ export class AuthSession {
 	}
 
 	static async generate(app: App): Promise<AuthSession> {
-		const authSession = await Configuration.Requester.request(app.host, 'auth/session/generate', {
+		const authSession = await Config.requester.request(app.host, 'auth/session/generate', {
 			appSecret: app.secret
 		}, false);
 		return new AuthSession(app, authSession.token, authSession.url);
 	}
 
 	async getUserToken(): Promise<UserToken | ApiError> {
-		const userToken = await Configuration.Requester.request(this._app.host, 'auth/session/userkey', {
+		const userToken = await Config.requester.request(this._app.host, 'auth/session/userkey', {
 			appSecret: this._app.secret,
 			token: this._token
 		}, false);
@@ -146,7 +149,7 @@ export class AuthSession {
 			if (this._cancel) {
 				throw new Error('waiting-canceled');
 			}
-			await delay(Configuration.waitForAuthInterval);
+			await delay(Config.authorization.pollingInterval);
 		}
 	}
 
@@ -173,7 +176,7 @@ export class Account {
 	}
 
 	async request(endpoint: string, data: {[x: string]: any}): Promise<any> {
-		const res = await Configuration.Requester.request(this.app.host, endpoint, {
+		const res = await Config.requester.request(this.app.host, endpoint, {
 			i: this._i,
 			...data
 		}, false);
@@ -182,7 +185,7 @@ export class Account {
 	}
 
 	async requestBinary(endpoint: string, data: {[x: string]: any}): Promise<any> {
-		const res = await Configuration.Requester.request(this.app.host, endpoint, {
+		const res = await Config.requester.request(this.app.host, endpoint, {
 			i: this._i,
 			...data
 		}, true);
