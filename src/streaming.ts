@@ -3,13 +3,15 @@ import { EventEmitter } from 'events';
 import { generateEAID16 } from 'eaid';
 import { delay } from './util';
 
-export interface StreamMessage {
+
+export interface StreamEventFrame {
 	type: string;
 	body: Record<string, any>;
 }
 
 export interface NoteUpdatedEvent {
-	noteId: string;
+	id: string;
+	type: string;
 	body: Record<string, any>;
 }
 
@@ -17,15 +19,13 @@ export class Stream {
 	isConnected: boolean;
 	private _conn: WSConnection;
 	private _messenger: EventEmitter;
-	messageRecievedEvent: EventEmitter;
-	noteUpdatedEvent: EventEmitter;
+	event: EventEmitter;
 
 	constructor(conn: WSConnection) {
 		this.isConnected = true;
 		this._conn = conn;
 		this._messenger = new EventEmitter();
-		this.messageRecievedEvent = new EventEmitter();
-		this.noteUpdatedEvent = new EventEmitter();
+		this.event = new EventEmitter();
 
 		this._conn.on('error', (err) => {
 			console.log('[debug] conn error:', err);
@@ -36,18 +36,16 @@ export class Stream {
 			this._messenger.emit('close');
 			this._conn.removeAllListeners();
 		});
-		this._conn.on('message', (frame) => {
-			if (frame.type === 'utf8' && frame.utf8Data) {
+		this._conn.on('message', (data) => {
+			if (data.type === 'utf8' && data.utf8Data) {
 				try {
-					const message: StreamMessage = JSON.parse(frame.utf8Data);
+					const frame: StreamEventFrame = JSON.parse(data.utf8Data);
 					// console.log('[debug] message:', frame);
 					// message.type.startsWith('api:')
-					this._messenger.emit('message', message);
-					this.messageRecievedEvent.emit(message.type, message.body);
-					if (message.type == 'noteUpdated') {
-						const event = message.body;
-						const noteUpdated: NoteUpdatedEvent = { noteId: event.id, body: event.body };
-						this.noteUpdatedEvent.emit(event.type, noteUpdated);
+					this._messenger.emit('message', frame);
+					if (frame.type != 'channel') {
+						this.event.emit('*', frame);
+						this.event.emit(frame.type, frame.body);
 					}
 				}
 				catch (err) {
@@ -86,7 +84,7 @@ export class Stream {
 	sendMessage(type: string, body: Record<string, any>): Promise<void> {
 		return new Promise<void>((resolve, reject) => {
 			if (!this.isConnected) throw new Error('stream is already closed');
-			const message: StreamMessage = { type, body };
+			const message: StreamEventFrame = { type, body };
 			const messageJson = JSON.stringify(message);
 			this._conn.send(messageJson, (err) => {
 				if (err) {
@@ -131,9 +129,9 @@ export class StreamChannel {
 		this._stream = stream;
 		this._id = channelId;
 		this.event = new EventEmitter();
-		const messageListener = (message: StreamMessage) => {
-			if (message.type != 'channel') return;
-			const event = message.body;
+		const messageListener = (frame: StreamEventFrame) => {
+			if (frame.type != 'channel') return;
+			const event = frame.body;
 			if (event.id != this._id) return;
 			this.event.emit(event.type, event.body);
 		};
