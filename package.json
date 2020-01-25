@@ -18,6 +18,7 @@
   "dependencies": {
     "@types/websocket": "^1.0.0",
     "cafy": "15.2.x",
+    "eaid": "1.0.x",
     "form-data": "3.0.x",
     "node-fetch": "2.6.x",
     "websocket": "^1.0.31"

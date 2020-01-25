@@ -1,6 +1,6 @@
 import { client as WSClient, connection as WSConnection, IClientConfig } from 'websocket';
 import { EventEmitter } from 'events';
-import { generateEAID16 } from './eaid';
+import { generateEAID16 } from 'eaid';
 import { delay } from './util';
 
 export interface StreamMessage {
