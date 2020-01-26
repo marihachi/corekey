@@ -110,20 +110,11 @@ export class Stream {
 		});
 	}
 
-	async close(): Promise<void> {
-		if (!this.isConnected) throw new Error('stream is already closed');
-		this._conn.close();
-		while (this.isConnected) {
-			await delay(1);
-		}
-	}
-
-	sendMessage(type: string, body: Record<string, any>): Promise<void> {
+	sendEvent(type: string, body: Record<string, any>): Promise<void> {
 		return new Promise<void>((resolve, reject) => {
 			if (!this.isConnected) throw new Error('stream is already closed');
-			const message: StreamEventFrame = { type, body };
-			const messageJson = JSON.stringify(message);
-			this._conn.send(messageJson, (err) => {
+			const frame: StreamEventFrame = { type, body };
+			this._conn.send(JSON.stringify(frame), (err) => {
 				if (err) {
 					reject(new Error('send-error'));
 					return;
@@ -133,15 +124,23 @@ export class Stream {
 		});
 	}
 
-	async connectChannel(channel: string, params?: Record<string, any>): Promise<StreamChannel> {
+	async openChannel(channel: string, params?: Record<string, any>): Promise<StreamChannel> {
 		if (!this.isConnected) throw new Error('stream is already closed');
 		const id = generateEAID12();
-		await this.sendMessage('connect', {
+		await this.sendEvent('connect', {
 			channel: channel,
 			id: id,
 			params: params
 		});
 		return new StreamChannel(this, id, this._messenger);
+	}
+
+	async disconnect(): Promise<void> {
+		if (!this.isConnected) throw new Error('stream is already closed');
+		this._conn.close();
+		while (this.isConnected) {
+			await delay(1);
+		}
 	}
 }
 
@@ -155,9 +154,8 @@ class StreamChannel {
 		this._id = channelId;
 		this.event = new EventEmitter();
 		const messageListener = (frame: StreamEventFrame) => {
-			if (frame.type != 'channel') return;
+			if (frame.type != 'channel' || frame.body.id != this._id) return;
 			const event = frame.body;
-			if (event.id != this._id) return;
 			this.event.emit(event.type, event.body);
 		};
 		messenger.on('message', messageListener);
@@ -168,9 +166,18 @@ class StreamChannel {
 		messenger.on('close', closeListener);
 	}
 
-	closeChennel(): Promise<void> {
-		if (!this._stream.isConnected) throw new Error('stream is already closed');
-		return this._stream.sendMessage('disconnect', { id: this._id });
+	sendEvent(type: string, body: Record<string, any>): Promise<void> {
+		return this._stream.sendEvent('channel', {
+			id: this._id,
+			type: type,
+			body: body
+		});
+	}
+
+	close(): Promise<void> {
+		return this._stream.sendEvent('disconnect', {
+			id: this._id
+		});
 	}
 }
 
@@ -195,13 +202,13 @@ class NoteUpdatedSubscriber {
 	}
 
 	subscribe(noteId: string): Promise<void> {
-		return this._stream.sendMessage('subNote', {
+		return this._stream.sendEvent('subNote', {
 			id: noteId
 		});
 	}
 
 	unsubscribe(noteId: string): Promise<void> {
-		return this._stream.sendMessage('unsubNote', {
+		return this._stream.sendEvent('unsubNote', {
 			id: noteId
 		});
 	}
