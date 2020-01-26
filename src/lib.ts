@@ -4,10 +4,11 @@ import FormData from 'form-data';
 import $ from 'cafy';
 import { IClientConfig } from 'websocket';
 import { delay } from './util';
-import { Stream, NoteUpdatedEvent } from './streaming';
-
+import { Stream, StreamEventFrame, ChannelEvent, NoteUpdatedEvent } from './streaming';
 
 export {
+	StreamEventFrame,
+	ChannelEvent,
 	NoteUpdatedEvent
 };
 
@@ -68,9 +69,14 @@ export class FetchRequester implements IRequester {
 class AuthorizationConfig {
 	pollingInterval: number = 300;
 }
+class StreamingConfig {
+	// event: *
+	wildcardEventEnabled: boolean = false;
+}
 class RootConfig {
 	requester: IRequester = new FetchRequester();
 	authorization: AuthorizationConfig = new AuthorizationConfig();
+	streaming: StreamingConfig = new StreamingConfig();
 }
 export let Config = new RootConfig();
 
