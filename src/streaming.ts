@@ -1,97 +1,87 @@
-import { client as WSClient, connection as WSConnection, IClientConfig } from 'websocket';
+import { client as WSClient, connection as WSConnection, IClientConfig, IMessage } from 'websocket';
+import ReconnectingWebsocket from 'reconnecting-websocket';
 import { EventEmitter } from 'events';
-import { generateEAID12 } from 'eaid';
 import { Config } from './lib';
-import { delay } from './util';
+import { debugLog, delay } from './util';
+import autobind from 'autobind-decorator';
 
-interface StreamEvents {
-	'*': StreamEventFrame;
-	noteUpdated: NoteUpdatedEvent;
-	channel: ChannelEvent;
+interface Connection {
+	connected: boolean;
+
+	close(reasonCode?: number, description?: string): void;
+	send(data: any, cb?: (err?: Error) => void): void;
+
+	on(event: 'message', cb: (data: { type: string, utf8Data?: string }) => void): this;
+	on(event: 'close', cb: (code: number, desc: string) => void): this;
+	on(event: 'error', cb: (err: Error) => void): this;
+	addListener(event: 'message', cb: (data: { type: string, utf8Data?: string }) => void): this;
+	addListener(event: 'close', cb: (code: number, desc: string) => void): this;
+	addListener(event: 'error', cb: (err: Error) => void): this;
+
+	removeListener(event: string | symbol, listener: (...args: any[]) => void): this;
 }
 
-interface ChannelEvents {
-	note: Record<string, any>;
-}
+/** wildcard event is supported: '*' */
+export class Stream extends EventEmitter {
+	private internalEvent: EventEmitter;
 
-interface NoteUpdatedEvents {
-	reacted: NoteUpdatedEvent;
-	unreacted: NoteUpdatedEvent;
-	deleted: NoteUpdatedEvent;
-}
+	private idSource: number = 1;
 
-interface TypedEventEmitter<T> extends EventEmitter {
-	addListener<K extends keyof T>(event: K, listener: (arg: T[K]) => void): this;
-	addListener(event: string, listener: (arg: any) => void): this;
-	on<K extends keyof T>(event: K, listener: (arg: T[K]) => void): this;
-	on(event: string, listener: (arg: any) => void): this;
-	once<K extends keyof T>(event: K, listener: (arg: T[K]) => void): this;
-	once(event: string, listener: (arg: any) => void): this;
-	removeListener<K extends keyof T>(event: K, listener: (arg: T[K]) => void): this;
-	removeListener(event: string, listener: (arg: any) => void): this;
-	removeAllListeners<K extends keyof T>(event: K): this;
-	removeAllListeners(event?: string): this;
-	listeners<K extends keyof T>(event: K): Function[];
-	listeners(event: string): Function[];
-}
+	public readonly conn: Connection;
 
-export interface StreamEventFrame {
-	type: string;
-	body: Record<string, any>;
-}
-
-export interface NoteUpdatedEvent {
-	id: string;
-	type: string;
-	body: Record<string, any>;
-}
-
-export interface ChannelEvent {
-	id: string;
-	type: string;
-	body: Record<string, any>;
-}
-
-export class Stream {
-	isConnected: boolean;
-	private _conn: WSConnection;
-	private _messenger: EventEmitter;
-	event: TypedEventEmitter<StreamEvents>;
-	noteUpdated: NoteUpdatedSubscriber;
-
-	constructor(conn: WSConnection) {
-		this.isConnected = true;
-		this._conn = conn;
-		this._messenger = new EventEmitter();
-		this.event = new EventEmitter();
-		this.noteUpdated = new NoteUpdatedSubscriber(this, this._messenger);
-
-		this._conn.on('error', (err) => {
-			console.log('[debug] conn error:', err);
-		});
-		this._conn.on('close', () => {
-			console.log('[debug] closed');
-			this.isConnected = false;
-			this._messenger.emit('close');
-			this._conn.removeAllListeners();
-		});
-		this._conn.on('message', (data) => {
-			if (data.type === 'utf8' && data.utf8Data) {
-				try {
-					const frame: StreamEventFrame = JSON.parse(data.utf8Data);
-					if (Config.streaming.wildcardEventEnabled) {
-						this.event.emit('*', frame);
-					}
-					this.event.emit(frame.type, frame.body);
-					this._messenger.emit('message', frame);
-				}
-				catch (err) {
-					console.log('[debug] JSON parse error:', err);
-				}
-			}
-		});
+	constructor(conn: Connection) {
+		super();
+		this.conn = conn;
+		this.internalEvent = new EventEmitter();
+		
+		this.conn.addListener('message', this.onMessage);
+		this.conn.addListener('error', this.onError);
+		this.conn.addListener('close', this.onClose);
 	}
 
+	@autobind
+	private onMessage(data: IMessage) {
+		if (data.type === 'utf8' && data.utf8Data) {
+			let frame: Record<string, any> | null = null;
+			try {
+				frame = JSON.parse(data.utf8Data);
+			}
+			catch (err) {
+				debugLog(err);
+			}
+			if (frame == null) return;
+			if (Config.streaming.wildcardEventEnabled) {
+				this.emit('*', frame);
+			}
+			this.emit(frame.type, frame.body);
+			this.internalEvent.emit('message', frame);
+		}
+	}
+
+	@autobind
+	private onError(err: Error) {
+		debugLog('ws error');
+		debugLog(err);
+		this.internalEvent.emit('error', err);
+	}
+
+	@autobind
+	private onClose() {
+		debugLog('ws closed');
+		this.conn.removeListener('message', this.onMessage);
+		this.conn.removeListener('error', this.onError);
+		this.conn.removeListener('close', this.onClose);
+		this.internalEvent.emit('close');
+	}
+
+	@autobind
+	private generateId(): number {
+		const id = this.idSource;
+		this.idSource++;
+		return id;
+	}
+
+	@autobind
 	static connect(host: string, secure: boolean, token?: string, wsConfig?: IClientConfig): Promise<Stream> {
 		return new Promise((resolve, reject) => {
 			wsConfig = wsConfig || {};
@@ -105,17 +95,27 @@ export class Stream {
 				resolve(new Stream(conn));
 			});
 			const protocol = secure ? 'wss' : 'ws';
-			const query = token ? `?i=${token}`: '';
-			client.connect(`${protocol}://${host}/streaming${query}`);
+			const path = '/streaming';
+			const query = token ? `i=${token}`: '';
+			client.connect(`${protocol}://${host}/${path}?${query}`);
+
+
+			const stream = new ReconnectingWebsocket(`${protocol}://${host}/${path}?${query}`, '', { minReconnectionDelay: 1 });
+			
 		});
 	}
 
-	sendEvent(type: string, body: Record<string, any>): Promise<void> {
+	@autobind
+	send(type: string, body: Record<string, any>): Promise<void> {
 		return new Promise<void>((resolve, reject) => {
-			if (!this.isConnected) throw new Error('stream is already closed');
-			const frame: StreamEventFrame = { type, body };
-			this._conn.send(JSON.stringify(frame), (err) => {
+			if (!this.conn.connected) {
+				reject(new Error('stream-already-closed'));
+				return;
+			}
+			const frame = { type, body };
+			this.conn.send(JSON.stringify(frame), err => {
 				if (err) {
+					debugLog(err);
 					reject(new Error('send-error'));
 					return;
 				}
@@ -124,92 +124,84 @@ export class Stream {
 		});
 	}
 
+	@autobind
 	async openChannel(channel: string, params?: Record<string, any>): Promise<StreamChannel> {
-		if (!this.isConnected) throw new Error('stream is already closed');
-		const id = generateEAID12();
-		await this.sendEvent('connect', {
+		if (!this.conn.connected) {
+			throw new Error('stream-already-closed');
+		}
+		const body: Record<string, any> = {
 			channel: channel,
-			id: id,
-			params: params
-		});
-		return new StreamChannel(this, id, this._messenger);
+			id: this.generateId()
+		};
+		if (params != null) body.params = params;
+		await this.send('connect', body);
+		return new StreamChannel(this, this.internalEvent, body.id);
 	}
 
+	@autobind
 	async disconnect(): Promise<void> {
-		if (!this.isConnected) throw new Error('stream is already closed');
-		this._conn.close();
-		while (this.isConnected) {
+		if (!this.conn.connected) throw new Error('stream-already-closed');
+		this.conn.close();
+		let time = 0;
+		while (this.conn.connected) {
 			await delay(1);
+			time++;
+			if (time > 1000) {
+				throw new Error('disconnect-timeout');
+			}
 		}
 	}
 }
 
-class StreamChannel {
-	private _stream: Stream;
-	private _id: string;
-	event: TypedEventEmitter<ChannelEvents>;
+class StreamChannel extends EventEmitter {
 
-	constructor(stream: Stream, channelId: string, messenger: EventEmitter) {
-		this._stream = stream;
-		this._id = channelId;
-		this.event = new EventEmitter();
-		const messageListener = (frame: StreamEventFrame) => {
-			if (frame.type != 'channel' || frame.body.id != this._id) return;
-			const event = frame.body;
-			this.event.emit(event.type, event.body);
-		};
-		messenger.on('message', messageListener);
-		const closeListener = () => {
-			messenger.removeListener('message', messageListener);
-			messenger.removeListener('close', closeListener);
-		};
-		messenger.on('close', closeListener);
+	private internalEvent: EventEmitter;
+
+	public readonly stream: Stream;
+
+	public readonly id: string;
+
+	constructor(stream: Stream, internalEvent: EventEmitter, channelId: string) {
+		super();
+		this.internalEvent = internalEvent;
+		this.stream = stream;
+		this.id = channelId;
+		this.internalEvent.addListener('message', this.onMessage);
+		this.internalEvent.addListener('close', this.onClose);
 	}
 
-	sendEvent(type: string, body: Record<string, any>): Promise<void> {
-		return this._stream.sendEvent('channel', {
-			id: this._id,
+	@autobind
+	private onMessage(frame: Record<string, any>) {
+		if (frame.type != 'channel') return;
+		const event = frame.body;
+		if (event.id != this.id) return;
+		if (Config.streaming.wildcardEventEnabled) {
+			this.emit('*', event);
+		}
+		this.emit(event.type, event.body);
+	}
+
+	@autobind
+	private onClose() {
+		this.internalEvent.removeListener('message', this.onMessage);
+		this.internalEvent.removeListener('close', this.onClose);
+	}
+
+	@autobind
+	send(type: string, body: Record<string, any>): Promise<void> {
+		return this.stream.send('channel', {
+			id: this.id,
 			type: type,
 			body: body
 		});
 	}
 
-	close(): Promise<void> {
-		return this._stream.sendEvent('disconnect', {
-			id: this._id
+	@autobind
+	async close(): Promise<void> {
+		await this.stream.send('disconnect', {
+			id: this.id
 		});
-	}
-}
-
-class NoteUpdatedSubscriber {
-	private _stream: Stream;
-	event: TypedEventEmitter<NoteUpdatedEvents>;
-
-	constructor(stream: Stream, messenger: EventEmitter) {
-		this._stream = stream;
-		this.event = new EventEmitter();
-		const messageListener = (frame: StreamEventFrame) => {
-			if (frame.type != 'noteUpdated') return;
-			const event = frame.body;
-			this.event.emit(event.type, event);
-		};
-		messenger.on('message', messageListener);
-		const closeListener = () => {
-			messenger.removeListener('message', messageListener);
-			messenger.removeListener('close', closeListener);
-		};
-		messenger.on('close', closeListener);
-	}
-
-	subscribe(noteId: string): Promise<void> {
-		return this._stream.sendEvent('subNote', {
-			id: noteId
-		});
-	}
-
-	unsubscribe(noteId: string): Promise<void> {
-		return this._stream.sendEvent('unsubNote', {
-			id: noteId
-		});
+		this.internalEvent.removeListener('message', this.onMessage);
+		this.internalEvent.removeListener('close', this.onClose);
 	}
 }

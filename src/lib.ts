@@ -4,13 +4,7 @@ import FormData from 'form-data';
 import $ from 'cafy';
 import { IClientConfig } from 'websocket';
 import { delay } from './util';
-import { Stream, StreamEventFrame, ChannelEvent, NoteUpdatedEvent } from './streaming';
-
-export {
-	StreamEventFrame,
-	ChannelEvent,
-	NoteUpdatedEvent
-};
+import { Stream } from './streaming';
 
 const isReadableStream = (obj: any) => obj != undefined && obj.readable === true && typeof obj.read == 'function';
 
@@ -77,6 +71,7 @@ class RootConfig {
 	requester: IRequester = new FetchRequester();
 	authorization: AuthorizationConfig = new AuthorizationConfig();
 	streaming: StreamingConfig = new StreamingConfig();
+	debugLogEnabled: boolean = false;
 }
 export let Config = new RootConfig();
 
