@@ -1,5 +1,8 @@
 # corekey
-A simply Misskey library for Node.js
+**Deprecated!**  
+The official api library is now out -> [misskey.js](https://github.com/misskey-dev/misskey.js)  
+  
+A simply Misskey library for Node.js  
 
 ## Installation
 ```
